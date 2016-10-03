@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    
+    <meta name="viewport" content="initial-scale=1, maximum-scale=1,user-scalable=no">
+    <title>MNDNR Practicum</title>
+    <link rel="stylesheet" href="https://js.arcgis.com/3.17/dijit/themes/tundra/tundra.css">
+    <link rel="stylesheet" href="https://js.arcgis.com/3.17/esri/css/esri.css">
+    <style>
+      html, body, #mapDiv {
+        padding: 0;
+        margin: 0;
+        height: 100%;
+      }
+      #messages{
+        background-color: #fff;
+        box-shadow: 0 0 5px #888;
+        font-size: 1.1em;
+        max-width: 15em;
+        padding: 0.5em;
+        position: absolute;
+        right: 20px;
+        top: 20px;
+        z-index: 40;
+      }
+    </style>
+    <script src="https://js.arcgis.com/3.17/"></script>
+    <script>
+      var map;
+      require([
+        "esri/map", "esri/layers/ArcGISTiledMapServiceLayer","esri/layers/FeatureLayer", 
+        "esri/tasks/query", "esri/geometry/Circle",
+        "esri/graphic", "esri/symbols/SimpleMarkerSymbol",
+        "esri/symbols/SimpleLineSymbol", "esri/symbols/SimpleFillSymbol", "esri/renderers/SimpleRenderer",
+        "esri/config", "esri/Color", "dojo/dom", "dojo/domReady!","esri/SpatialReference"
+      ], function(
+        TiledLayer, FeatureLayer,
+        Query, Circle,Graphic,
+        SimpleMarkerSymbol,SimpleLineSymbol, SimpleFillSymbol, SimpleRenderer,
+        esriConfig, Color, dom, SpatialReference, Map
+      ) {
+       
+        esriConfig.defaults.io.proxyUrl = "http://arcgis.dnr.state.mn.us/proxy.ashx";
+
+        map = new Map("mapDiv", { 
+          basemap: "topo"
+        });
+
+        var tiledLayer = new TiledLayer("http://arcgis.dnr.state.mn.us/arcgis/rest/services/mndnr_2010_fsa_photos/MapServer",{
+         
+        });
+
+        var featureLayer = new FeatureLayer("http://arcgis.dnr.state.mn.us/arcgis/rest/services/lam/mndnr_wells/MapServer/0",{
+          outFields: ["*"]
+        });
+
+        var symbol = new SimpleMarkerSymbol(
+          SimpleMarkerSymbol.STYLE_CIRCLE, 
+          12, 
+          new SimpleLineSymbol(
+            SimpleLineSymbol.STYLE_NULL, 
+            new Color([247, 34, 101, 0.9]), 
+            1
+          ),
+          new Color([207, 34, 171])
+        );
+        
+        featureLayer.setSelectionSymbol(symbol); 
+        
+       
+        var nullSymbol = new SimpleMarkerSymbol().setSize(0);
+        
+        
+        map.addLayer(featureLayer);
+        
+        var circleSymb = new SimpleFillSymbol(
+          SimpleFillSymbol.STYLE_NULL,
+          new SimpleLineSymbol(
+            SimpleLineSymbol.STYLE_SHORTDASHDOTDOT,
+            new Color([255, 255, 0]),
+            2
+          ), new Color([255, 255, 0, 0.25])
+        );
+        var circle;
+
+       
+        map.on("click", function(evt){
+          circle = new Circle({
+            center: evt.mapPoint,
+            //geodesic: true,
+            radius: 1,
+            radiusUnit: "esriFeet"
+          });
+          map.graphics.clear();
+          map.infoWindow.hide();
+          var graphic = new Graphic(circle, circleSymb);
+          map.graphics.add(graphic);
+
+          var query = new Query();
+          query.outSpatialReference = new esri.SpatialReference(26915);
+          query.geometry = circle.getExtent();
+          featureLayer.queryFeatures(query, selectInBuffer);
+        });
+
+        function selectInBuffer(response){
+          var feature;
+          var features = response.features;
+          var inBuffer = [];
+
+          for (var i = 0; i < features.length; i++) {
+              feature = features[i];
+              inBuffer.push(feature.attributes[featureLayer.objectIdField]);
+          }
+          
+          var query = new Query();
+          query.objectIds = inBuffer;
+          
+          featureLayer.selectFeatures(query, FeatureLayer.SELECTION_NEW, function(results){
+            var totalCount = "";
+            r = "<b>The number of wells within the buffer is <i>" + totalCount+ "</i>.</b>";
+            dom.byId("messages").innerHTML = r;
+          });
+        }
+        
+      
+      });
+    </script>
+  </head>
+
+  <body>
+    <span id="messages">Click on the map to select wells witin 1 mile</span>
+    <div id="mapDiv"></div>
+  </body>
+</html>
